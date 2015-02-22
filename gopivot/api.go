@@ -25,6 +25,10 @@ type Story struct {
 	Url           string   `json:"url"`
 }
 
+type Iteration struct {
+	Stories []Story `json:"stories"`
+}
+
 type User struct {
 	ApiToken string `json:"api_token"`
 	Name     string `json:"name"`

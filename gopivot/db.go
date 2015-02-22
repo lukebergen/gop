@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var (
@@ -16,6 +17,13 @@ var (
 type Configuration struct {
 	CurrentUser      User
 	CurrentProjectId int
+}
+
+type Completion struct {
+	Id           int
+	Text         string
+	CurrentState string
+	LastTouched  time.Time
 }
 
 func Init() {
@@ -30,7 +38,7 @@ func LoadConfig() {
 		panic(err)
 	}
 
-	configFile, err := os.OpenFile(GopDir+"/config.json", os.O_RDWR|os.O_CREATE, 0640)
+	configFile, err := os.OpenFile(filepath.Join(GopDir, "config.json"), os.O_RDWR|os.O_CREATE, 0744)
 	if err != nil {
 		panic(err)
 	}
@@ -44,7 +52,7 @@ func SaveConfig() {
 	if err != nil {
 		panic(err)
 	}
-	if err := ioutil.WriteFile(GopDir+"/config.json", fileJson, 0640); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(GopDir, "config.json"), fileJson, 0744); err != nil {
 		panic(err)
 	}
 }

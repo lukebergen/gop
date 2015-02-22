@@ -6,16 +6,40 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	flag "github.com/ogier/pflag"
 )
 
+var completionScript string = `
+	if [ -n "$BASH_VERSION" ]; then
+		_gop_complete() {
+			COMPREPLY=()
+			local word="${COMP_WORDS[COMP_CWORD]}"
+			local completions="$(gop complete "$word")"
+			COMPREPLY=( $(compgen -W "$completions" -- "$word") )
+		}
+		complete -f -F _gop_complete gop
+	elif [ -n "$ZSH_VERSION" ]; then
+		_gop_complete() {
+			local word completions
+			word="$1"
+			completions="$(gop complete "${word}")"
+			reply=( "${(ps:\n:)completions}" )
+		}
+		compctl -f -K _gop_complete gop
+	fi
+`
+
 type Flags struct {
-	Short bool
-	User  string
-	Debug bool
-	State string
+	Short     bool
+	User      string
+	Debug     bool
+	State     string
+	ShellInit bool
 }
 
 func Exec() {
@@ -25,27 +49,42 @@ func Exec() {
 	flag.BoolVarP(&flags.Debug, "debug", "d", false, "Debug mode for dev. Usually just prints the API request being made")
 	flag.StringVarP(&flags.User, "user", "u", "me", "Filter by user. 'all' and 'me' are special. Otherwise just a username or initials")
 	flag.StringVarP(&flags.State, "state", "s", "active", "comma separated list of states to filter by. Defaults to 'active' which is a gop shorthand for 'started,finished,delivered,rejected'")
+	flag.BoolVar(&flags.ShellInit, "init", false, "Generate init shell script. Useful for rc files, not so much for users")
 
 	flag.Parse()
 
-	args := flag.Args()
-	if len(args) == 0 {
-		args = append(args, "usage")
-	}
-
-	switch args[0] {
-	case "login":
-		CommandLogin(flags)
-	case "project":
-		if len(args) == 2 {
-			CommandProject(flags, args[1])
-		} else {
-			CommandProject(flags, "")
+	if flags.ShellInit {
+		fmt.Println(completionScript)
+	} else {
+		args := flag.Args()
+		if len(args) == 0 {
+			args = append(args, "usage")
 		}
-	case "ls":
-		CommandLs(flags)
-	default:
-		flag.Usage()
+
+		switch args[0] {
+		case "login":
+			CommandLogin(flags)
+		case "project":
+			if len(args) == 2 {
+				CommandProject(flags, args[1])
+			} else {
+				CommandProject(flags, "")
+			}
+		case "ls":
+			CommandLs(flags)
+		case "current":
+			CommandCurrent(flags)
+		case "backlog":
+			CommandBacklog(flags)
+		case "complete":
+			if len(args) != 2 {
+				fmt.Println("this command takes exactly 1 argument")
+			} else {
+				CommandComplete(flags, args[1])
+			}
+		default:
+			flag.Usage()
+		}
 	}
 }
 
@@ -121,30 +160,126 @@ func CommandLs(flags Flags) {
 			qParams.Set("filter", strings.Join(filters, " "))
 		}
 
-		reqStr := fmt.Sprintf("/projects/%v/stories?%s", Config.CurrentProjectId, qParams.Encode())
-		if flags.Debug {
-			fmt.Println("Debug: " + reqStr)
-		}
-
-		body, _ := request(reqStr)
+		body, _ := request(fmt.Sprintf("/projects/%v/stories?%s", Config.CurrentProjectId, qParams.Encode()))
 		json.Unmarshal(body, &stories)
+		printStories(flags, stories)
+		recordStories(stories)
+	}
+}
 
-		if flags.Short {
-			for i := 0; i < len(stories); i++ {
-				char := strings.ToUpper(string(stories[i].CurrentState[0]))
-				fmt.Printf("%v %v: %v\n", char, stories[i].Id, stories[i].Name)
-			}
-		} else {
-			states := []string{"started", "finished", "delivered", "rejected"}
-			for i := 0; i < len(states); i++ {
-				fmt.Printf("%v:\n", states[i])
-				for j := 0; j < len(stories); j++ {
-					if stories[j].CurrentState == states[i] {
-						fmt.Printf("\t%v: %v\n", stories[j].Id, stories[j].Name)
-					}
-				}
-				fmt.Println()
-			}
+func CommandComplete(flags Flags, str string) {
+	compFilePath := filepath.Join(DbDir, "completions.json")
+
+	completions := make([]Completion, 0)
+
+	compFile, _ := os.OpenFile(compFilePath, os.O_RDWR|os.O_CREATE, 0744)
+	defer compFile.Close()
+
+	json.NewDecoder(compFile).Decode(&completions)
+
+	for i := 0; i < len(completions); i++ {
+		comp := completions[i]
+		if strings.HasPrefix(comp.Text, str) {
+			fmt.Println(comp.Text)
 		}
 	}
+}
+
+func CommandCurrent(flags Flags) {
+	storiesByIterationScope(flags, "current")
+}
+
+func CommandBacklog(flags Flags) {
+	storiesByIterationScope(flags, "backlog")
+}
+
+func storiesByIterationScope(flags Flags, scope string) {
+	iters := make([]Iteration, 0)
+	reqStr := fmt.Sprintf("/projects/%v/iterations?scope=%v", Config.CurrentProjectId, scope)
+	body, _ := request(reqStr)
+	json.Unmarshal(body, &iters)
+	if len(iters) != 1 {
+		fmt.Println("Got back weird number of iterations")
+	} else {
+		recordStories(iters[0].Stories)
+		printStories(flags, iters[0].Stories)
+	}
+}
+
+func printStories(flags Flags, stories []Story) {
+	if flags.Short {
+		for i := 0; i < len(stories); i++ {
+			char := strings.ToUpper(string(stories[i].CurrentState[0]))
+			fmt.Printf("%v %v: %v\n", char, stories[i].Id, stories[i].Name)
+		}
+	} else {
+		states := []string{"started", "finished", "delivered", "rejected", "unstarted"}
+		for i := 0; i < len(states); i++ {
+			fmt.Printf("%v:\n", states[i])
+			for j := 0; j < len(stories); j++ {
+				if stories[j].CurrentState == states[i] {
+					fmt.Printf("\t%v: %v\n", stories[j].Id, stories[j].Name)
+				}
+			}
+			fmt.Println()
+		}
+	}
+}
+
+func recordStories(stories []Story) {
+	compFilePath := filepath.Join(DbDir, "completions.json")
+
+	completions := make([]Completion, 0)
+
+	compFile, _ := os.OpenFile(compFilePath, os.O_RDWR|os.O_CREATE, 0744)
+	defer compFile.Close()
+
+	json.NewDecoder(compFile).Decode(&completions)
+
+	var foundCompletion bool
+	for i := 0; i < len(stories); i++ {
+		foundCompletion = false
+		story := stories[i]
+		for j := 0; j < len(completions); j++ {
+			comp := completions[j]
+			if story.Name == comp.Text {
+				comp.LastTouched = time.Now()
+				comp.CurrentState = story.CurrentState
+				foundCompletion = true
+			}
+		}
+		if !foundCompletion {
+			newComp := new(Completion)
+			newComp.Id = story.Id
+			newComp.Text = story.Name
+			newComp.CurrentState = story.CurrentState
+			newComp.LastTouched = time.Now()
+			completions = append(completions, *newComp)
+		}
+	}
+
+	newComps := make([]Completion, 0)
+	for i := 0; i < len(completions); i++ {
+		comp := completions[i]
+		if stringInSlice(comp.CurrentState, []string{"started", "finished", "delivered", "rejected"}) || (time.Since(comp.LastTouched)).Hours() < 24*14 {
+			newComps = append(newComps, comp)
+		}
+	}
+
+	fileJson, err := json.Marshal(newComps)
+	if err != nil {
+		panic(err)
+	}
+	if err := ioutil.WriteFile(compFilePath, fileJson, 0744); err != nil {
+		panic(err)
+	}
+}
+
+func stringInSlice(str string, strs []string) bool {
+	for i := 0; i < len(strs); i++ {
+		if str == strs[i] {
+			return true
+		}
+	}
+	return false
 }
