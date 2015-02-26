@@ -35,25 +35,29 @@ var completionScript string = `
 `
 
 type Flags struct {
-	Short     bool
-	User      string
+	Concise   bool
 	Debug     bool
-	State     string
 	ShellInit bool
+	State     string
+	User      string
+	Version   bool // actually handled by main where the const lives
 }
 
 func Exec() {
 	flags := Flags{}
 
-	flag.BoolVarP(&flags.Short, "concise", "c", false, "Print the concise form (similar to git status -s)")
+	flag.BoolVarP(&flags.Concise, "concise", "c", false, "Print the concise form (similar to git status -s)")
 	flag.BoolVarP(&flags.Debug, "debug", "d", false, "Debug mode for dev. Usually just prints the API request being made")
-	flag.StringVarP(&flags.User, "user", "u", "me", "Filter by user. 'all' and 'me' are special. Otherwise just a username or initials")
+	flag.BoolVar(&flags.ShellInit, "shell-init", false, "Generate init shell script. Useful for rc files, not so much for users")
 	flag.StringVarP(&flags.State, "state", "s", "active", "comma separated list of states to filter by. Defaults to 'active' which is a gop shorthand for 'started,finished,delivered,rejected'")
-	flag.BoolVar(&flags.ShellInit, "init", false, "Generate init shell script. Useful for rc files, not so much for users")
+	flag.StringVarP(&flags.User, "user", "u", "me", "Filter by user. 'all' and 'me' are special. Otherwise just a username or initials")
+	flag.BoolVarP(&flags.Version, "version", "", false, "Display version information")
 
 	flag.Parse()
 
-	if flags.ShellInit {
+	if flags.Version {
+		fmt.Printf("Version: %v\n", Version)
+	} else if flags.ShellInit {
 		fmt.Println(completionScript)
 	} else {
 		args := flag.Args()
@@ -83,7 +87,15 @@ func Exec() {
 				CommandComplete(flags, args[1])
 			}
 		default:
-			flag.Usage()
+			fmt.Println("Usage: gop [--version] [--help] [-u <user>] [-s <state-list>]")
+			fmt.Println("           [-c] [-d] <command> [<args>]")
+			fmt.Println("\nAvailable commands are:")
+			fmt.Println("   backlog        show all stories in the current projects backlog")
+			fmt.Println("   current        show all stories in the current projects current iteration")
+			fmt.Println("   login          provide your pivotal credentials for api access")
+			fmt.Println("   ls             list stories in current project")
+			fmt.Println("   project [name] show list of projects or set the 'current project' to the one specified")
+			// flag.Usage()
 		}
 	}
 }
@@ -172,7 +184,7 @@ func CommandComplete(flags Flags, str string) {
 
 	completions := make([]Completion, 0)
 
-	compFile, _ := os.OpenFile(compFilePath, os.O_RDWR|os.O_CREATE, 0744)
+	compFile, _ := os.OpenFile(compFilePath, os.O_RDWR|os.O_CREATE, 0700)
 	defer compFile.Close()
 
 	json.NewDecoder(compFile).Decode(&completions)
@@ -207,7 +219,7 @@ func storiesByIterationScope(flags Flags, scope string) {
 }
 
 func printStories(flags Flags, stories []Story) {
-	if flags.Short {
+	if flags.Concise {
 		for i := 0; i < len(stories); i++ {
 			char := strings.ToUpper(string(stories[i].CurrentState[0]))
 			fmt.Printf("%v %v: %v\n", char, stories[i].Id, stories[i].Name)
@@ -231,7 +243,7 @@ func recordStories(stories []Story) {
 
 	completions := make([]Completion, 0)
 
-	compFile, _ := os.OpenFile(compFilePath, os.O_RDWR|os.O_CREATE, 0744)
+	compFile, _ := os.OpenFile(compFilePath, os.O_RDWR|os.O_CREATE, 0700)
 	defer compFile.Close()
 
 	json.NewDecoder(compFile).Decode(&completions)
@@ -270,7 +282,7 @@ func recordStories(stories []Story) {
 	if err != nil {
 		panic(err)
 	}
-	if err := ioutil.WriteFile(compFilePath, fileJson, 0744); err != nil {
+	if err := ioutil.WriteFile(compFilePath, fileJson, 0622); err != nil {
 		panic(err)
 	}
 }

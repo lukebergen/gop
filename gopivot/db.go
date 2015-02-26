@@ -2,6 +2,7 @@ package gop
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -9,9 +10,10 @@ import (
 )
 
 var (
-	Config Configuration
-	GopDir string = filepath.Join(os.Getenv("HOME"), ".gopivot")
-	DbDir  string = filepath.Join(GopDir, "database")
+	Config  Configuration
+	GopDir  string = filepath.Join(os.Getenv("HOME"), ".gopivot")
+	DbDir   string = filepath.Join(GopDir, "database")
+	Version string
 )
 
 type Configuration struct {
@@ -26,19 +28,21 @@ type Completion struct {
 	LastTouched  time.Time
 }
 
-func Init() {
-	if err := os.MkdirAll(DbDir, 0744); err != nil {
+func Init(version string) {
+	Version = version
+	if err := os.MkdirAll(DbDir, 0700); err != nil {
+		fmt.Println("AWWW SHIT!")
 		panic(err)
 	}
 	LoadConfig()
 }
 
 func LoadConfig() {
-	if err := os.MkdirAll(GopDir, 0744); err != nil {
+	if err := os.MkdirAll(GopDir, 0700); err != nil {
 		panic(err)
 	}
 
-	configFile, err := os.OpenFile(filepath.Join(GopDir, "config.json"), os.O_RDWR|os.O_CREATE, 0744)
+	configFile, err := os.OpenFile(filepath.Join(GopDir, "config.json"), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +56,7 @@ func SaveConfig() {
 	if err != nil {
 		panic(err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(GopDir, "config.json"), fileJson, 0744); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(GopDir, "config.json"), fileJson, 0600); err != nil {
 		panic(err)
 	}
 }
