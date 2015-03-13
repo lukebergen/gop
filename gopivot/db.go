@@ -2,7 +2,6 @@ package gop
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -31,7 +30,6 @@ type Completion struct {
 func Init(version string) {
 	Version = version
 	if err := os.MkdirAll(DbDir, 0700); err != nil {
-		fmt.Println("AWWW SHIT!")
 		panic(err)
 	}
 	LoadConfig()
