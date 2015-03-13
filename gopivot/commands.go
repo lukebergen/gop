@@ -68,6 +68,8 @@ func Exec() {
 		switch args[0] {
 		case "login":
 			CommandLogin(flags)
+		case "logout":
+			CommandLogout(flags)
 		case "project":
 			if len(args) == 2 {
 				CommandProject(flags, args[1])
@@ -117,6 +119,11 @@ func CommandLogin(flags Flags) {
 
 	// TODO: use reflection to add Config.Set/Get methods instead of accessing/saving directly like this
 	Config.CurrentUser = currentUser
+	SaveConfig()
+}
+
+func CommandLogout(flags Flags) {
+	Config.CurrentUser = User{}
 	SaveConfig()
 }
 
