@@ -109,6 +109,9 @@ func Exec() {
 			fmt.Println("   login          provide your pivotal credentials for api access")
 			fmt.Println("   ls             list stories in current project")
 			fmt.Println("   project [name] show list of projects or set the 'current project' to the one specified")
+			fmt.Println("\nNote:")
+			fmt.Println("   If you add: eval \"$(gop --shell-init)\"")
+			fmt.Println("   to your .zshrc/.bashrc file, you'll get auto-completion for story names")
 			// flag.Usage()
 		}
 	}
