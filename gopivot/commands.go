@@ -8,9 +8,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
+	"code.google.com/p/gopass"
 	flag "github.com/ogier/pflag"
 )
 
@@ -37,17 +40,23 @@ var completionScript string = `
 type Flags struct {
 	Concise   bool
 	Debug     bool
+	Help      bool
 	ShellInit bool
 	State     string
 	User      string
 	Version   bool // actually handled by main where the const lives
 }
 
+type command func(flags Flags)
+
+var commands map[string]command
+
 func Exec() {
 	flags := Flags{}
 
 	flag.BoolVarP(&flags.Concise, "concise", "c", false, "Print the concise form (similar to git status -s)")
 	flag.BoolVarP(&flags.Debug, "debug", "d", false, "Debug mode for dev. Usually just prints the API request being made")
+	flag.BoolVarP(&flags.Help, "help", "", false, "Print help")
 	flag.BoolVar(&flags.ShellInit, "shell-init", false, "Generate init shell script. Useful for rc files, not so much for users")
 	flag.StringVarP(&flags.State, "state", "s", "active", "comma separated list of states to filter by. Defaults to 'active' which is a gop shorthand for 'started,finished,delivered,rejected'")
 	flag.StringVarP(&flags.User, "user", "u", "me", "Filter by user. 'all' and 'me' are special. Otherwise just a username or initials")
@@ -76,6 +85,8 @@ func Exec() {
 			} else {
 				CommandProject(flags, "")
 			}
+		case "config":
+			CommandConfig(flags)
 		case "ls":
 			CommandLs(flags)
 		case "current":
@@ -93,6 +104,7 @@ func Exec() {
 			fmt.Println("           [-c] [-d] <command> [<args>]")
 			fmt.Println("\nAvailable commands are:")
 			fmt.Println("   backlog        show all stories in the current projects backlog")
+			fmt.Println("   config         set various config options. See config --help for examples")
 			fmt.Println("   current        show all stories in the current projects current iteration")
 			fmt.Println("   login          provide your pivotal credentials for api access")
 			fmt.Println("   ls             list stories in current project")
@@ -106,8 +118,7 @@ func CommandLogin(flags Flags) {
 	var username, password string
 	fmt.Printf("Username: ")
 	fmt.Scan(&username)
-	fmt.Printf("Password: ")
-	fmt.Scan(&password)
+	password, _ = gopass.GetPass("Password: ")
 
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", "https://www.pivotaltracker.com/services/v5/me", nil)
@@ -117,7 +128,6 @@ func CommandLogin(flags Flags) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	json.Unmarshal(body, &currentUser)
 
-	// TODO: use reflection to add Config.Set/Get methods instead of accessing/saving directly like this
 	Config.CurrentUser = currentUser
 	SaveConfig()
 }
@@ -125,6 +135,24 @@ func CommandLogin(flags Flags) {
 func CommandLogout(flags Flags) {
 	Config.CurrentUser = User{}
 	SaveConfig()
+}
+
+func CommandConfig(flags Flags) {
+	configUpdated := false
+	for i := 1; i < len(flag.Args()); i++ {
+		x := strings.Split(flag.Args()[i], "=")
+		key := x[0]
+		value := x[1]
+		switch key {
+		case "TabCompleteWordCutoff":
+			temp, _ := strconv.ParseInt(value, 0, 64)
+			Config.TabCompleteWordCutoff = int(temp)
+			configUpdated = true
+		}
+	}
+	if configUpdated {
+		SaveConfig()
+	}
 }
 
 func CommandProject(flags Flags, setTo string) {
@@ -199,9 +227,44 @@ func CommandComplete(flags Flags, str string) {
 	for i := 0; i < len(completions); i++ {
 		comp := completions[i]
 		if strings.HasPrefix(comp.Text, str) {
-			fmt.Println(comp.Text)
+			fmt.Println(StoryLongToShort(comp.Text))
 		}
 	}
+}
+
+func StoryShortToLong(shortStory string) string {
+	if Config.TabCompleteWordCutoff == 0 {
+		return shortStory
+	} else {
+		compFilePath := filepath.Join(DbDir, "completions.json")
+
+		completions := make([]Completion, 0)
+
+		compFile, _ := os.OpenFile(compFilePath, os.O_RDWR|os.O_CREATE, 0700)
+		defer compFile.Close()
+
+		json.NewDecoder(compFile).Decode(&completions)
+
+		for i := 0; i < len(completions); i++ {
+			comp := completions[i]
+			re := regexp.MustCompile("\\.\\.\\.$")
+			if strings.HasPrefix(comp.Text, re.ReplaceAllString(shortStory, "")) {
+				return comp.Text
+			}
+		}
+	}
+	return ""
+}
+
+func StoryLongToShort(longStory string) string {
+	var text string
+	if Config.TabCompleteWordCutoff == 0 {
+		text = longStory
+	} else {
+		words := strings.Split(longStory, " ")
+		text = strings.Join(words[:Config.TabCompleteWordCutoff], " ") + "..."
+	}
+	return text
 }
 
 func CommandCurrent(flags Flags) {

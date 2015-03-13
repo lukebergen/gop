@@ -16,8 +16,9 @@ var (
 )
 
 type Configuration struct {
-	CurrentUser      User
-	CurrentProjectId int
+	CurrentUser           User
+	CurrentProjectId      int
+	TabCompleteWordCutoff int
 }
 
 type Completion struct {
