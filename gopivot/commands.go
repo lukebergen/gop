@@ -80,15 +80,23 @@ func Exec() {
 		case "logout":
 			CommandLogout(flags)
 		case "project":
-			if len(args) == 2 {
-				CommandProject(flags, args[1])
+			if flags.Help {
+				HelpProject()
 			} else {
-				CommandProject(flags, "")
+				if len(args) == 2 {
+					CommandProject(flags, args[1])
+				} else {
+					CommandProject(flags, "")
+				}
 			}
 		case "config":
 			CommandConfig(flags)
 		case "ls":
-			CommandLs(flags)
+			if flags.Help {
+				HelpLs()
+			} else {
+				CommandLs(flags)
+			}
 		case "current":
 			CommandCurrent(flags)
 		case "backlog":
@@ -100,21 +108,24 @@ func Exec() {
 				CommandComplete(flags, args[1])
 			}
 		default:
-			fmt.Println("Usage: gop [--version] [--help] [-u <user>] [-s <state-list>]")
-			fmt.Println("           [-c] [-d] <command> [<args>]")
-			fmt.Println("\nAvailable commands are:")
-			fmt.Println("   backlog        show all stories in the current projects backlog")
-			fmt.Println("   config         set various config options. See config --help for examples")
-			fmt.Println("   current        show all stories in the current projects current iteration")
-			fmt.Println("   login          provide your pivotal credentials for api access")
-			fmt.Println("   ls             list stories in current project")
-			fmt.Println("   project [name] show list of projects or set the 'current project' to the one specified")
-			fmt.Println("\nNote:")
-			fmt.Println("   If you add: eval \"$(gop --shell-init)\"")
-			fmt.Println("   to your .zshrc/.bashrc file, you'll get auto-completion for story names")
-			// flag.Usage()
+			CommandHelp()
 		}
 	}
+}
+
+func CommandHelp() {
+	fmt.Println("Usage: gop [--version] [--help] [-u <user>] [-s <state-list>]")
+	fmt.Println("           [-c] [-d] <command> [<args>]")
+	fmt.Println("\nAvailable commands are:")
+	fmt.Println("   backlog        show all stories in the current projects backlog")
+	fmt.Println("   config         set various config options. See config --help for examples")
+	fmt.Println("   current        show all stories in the current projects current iteration")
+	fmt.Println("   login          provide your pivotal credentials for api access")
+	fmt.Println("   ls             list stories in current project")
+	fmt.Println("   project [name] show list of projects or set the 'current project' to the one specified")
+	fmt.Println("\nNote:")
+	fmt.Println("   If you add: eval \"$(gop --shell-init)\"")
+	fmt.Println("   to your .zshrc/.bashrc file, you'll get auto-completion for story names")
 }
 
 func CommandLogin(flags Flags) {
@@ -140,6 +151,14 @@ func CommandLogout(flags Flags) {
 	SaveConfig()
 }
 
+func HelpConfig() {
+	fmt.Println("gop config foo=bar")
+	fmt.Println("  Used to set various configuration options")
+	fmt.Println("  Currently setable config options include:")
+	fmt.Println("    TabCompleteWordCutoff - Number of words to truncate story names to for")
+	fmt.Println("                            commands that print/take story names")
+}
+
 func CommandConfig(flags Flags) {
 	configUpdated := false
 	for i := 1; i < len(flag.Args()); i++ {
@@ -156,6 +175,14 @@ func CommandConfig(flags Flags) {
 	if configUpdated {
 		SaveConfig()
 	}
+}
+
+func HelpProject() {
+	fmt.Println("gop project [project name] - command for working with projects\n")
+	fmt.Println("  If not project name is specified, lists all projects that")
+	fmt.Println("  the current user belongs to.")
+	fmt.Println("  If project name is given, sets the \"current project\" to")
+	fmt.Println("  the project specified.")
 }
 
 func CommandProject(flags Flags, setTo string) {
@@ -180,6 +207,19 @@ func CommandProject(flags Flags, setTo string) {
 			SaveConfig()
 		}
 	}
+}
+
+func HelpLs() {
+	fmt.Println("gop ls - Lists stories. The default flags are --user me --state active\n")
+	fmt.Println("  --user,  -u    # Filter by owner of story. \"me\" refers to the currently")
+	fmt.Println("                   logged in user. Can be specified by pivtal account name,")
+	fmt.Println("                   email address, or initials")
+	fmt.Println("  --state, -s    # Comma-separated list of states from the list unstarted,")
+	fmt.Println("                   started, finished, delivered, accepted, rejected.")
+	fmt.Println("                   \"active\" is a convinience value that represents")
+	fmt.Println("                   \"started,finished,delivered,rejected\"")
+	fmt.Println("  --concise, -c  # Lists stories in a more concise format. Useful for")
+	fmt.Println("                   piping the results into grep, awk, or other tools")
 }
 
 func CommandLs(flags Flags) {
