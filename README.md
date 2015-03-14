@@ -31,6 +31,10 @@ Commands
 
 There are other commands as well which you can read about in more detail by running gop --help.
 
+## Notes
+
+If after installing gop you add: `eval "$(gop --shell-init)"` to your .zshrc or .bashrc you can get tab-completion for story names.
+
 Most commands can be given --help for help text more specific to that particular command.
 
 Many commands respond to the -c or --concise flag which tends to give a more command-line tool friendly format. For example:
