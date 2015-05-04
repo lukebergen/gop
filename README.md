@@ -31,6 +31,18 @@ Commands
 
 There are other commands as well which you can read about in more detail by running gop --help.
 
+## Roadmap
+
+### Features for 1.0
+
+- Config working and able to at least set number of words till "..." shortening behavior for tab-completion
+
+- Making comments on tickets
+
+### Features for 1.x
+
+- Story creation/management
+
 ## Notes
 
 If after installing gop you add: `eval "$(gop --shell-init)"` to your .zshrc or .bashrc you can get tab-completion for story names.
