@@ -90,7 +90,11 @@ func Exec() {
 				}
 			}
 		case "config":
-			CommandConfig(flags)
+			if flags.Help {
+				HelpConfig()
+			} else {
+				CommandConfig(flags)
+			}
 		case "ls":
 			if flags.Help {
 				HelpLs()
